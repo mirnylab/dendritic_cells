@@ -6,6 +6,7 @@ from cooltools.api.eigdecomp import _filter_heatmap, _fake_cis
 
 import inspectro
 import inspectro.utils
+from inspectro.utils.eigdecomp import _normalized_affinity_matrix_from_cis
 
 import bioframe
 import cooler
@@ -13,6 +14,9 @@ import cooler
 import pySTATIS
 
 import tqdm
+
+from cooltools.lib import numutils
+
 
 def _affinity_matrix_trans(A, partition, perc_top, perc_bottom):
     A = np.array(A)
@@ -117,7 +121,14 @@ def read_coolers(COOLER_PATHS, CONDITIONS, BINSIZE, CHROMOSOMES):
     return OUTPUT
 
 
-def list_to_filtered_array(COOLERS_DICT, good_bins=None, conditions=None, backend='STATIS', norm=['norm_one']):
+def list_to_filtered_array(
+    COOLERS_DICT,
+    bad_bins=None,
+    good_bins=None,
+    conditions=None,
+    backend='STATIS',
+    norm=['norm_one']
+    ):
     """
     norm: normalization method to use (None, 'zscore', 'double_center')
     """
@@ -125,8 +136,12 @@ def list_to_filtered_array(COOLERS_DICT, good_bins=None, conditions=None, backen
         conditions = list( COOLERS_DICT.keys() )
 
     datasets = np.array([COOLERS_DICT[cond] for cond in conditions])
+    
     if good_bins is None:
         good_bins = np.all(datasets.sum(axis=1)!=0, axis=0) 
+
+    if not bad_bins is None:
+        good_bins[bad_bins] = False
 
     # Print stats of bad bins removal
     for i, cond in enumerate(conditions):
@@ -256,7 +271,7 @@ def summary_STATIS(st, CONDITIONS, n_comp_plot=10, COMP_TARGET=1, REGION=(0, 100
 
     N = len(CONDITIONS)
     n_cols = 3
-    n_rows = int(np.ceil(N//3))
+    n_rows = int(np.ceil(N//3))+1
 
     fig, axes = plt.subplots(n_rows, n_cols, squeeze=False, figsize=[3*n_cols, 3*n_rows])
     axes = axes.flatten()
@@ -444,3 +459,42 @@ def transform(X, reference, variance_explained=None, good_bins=None, n_comp=None
     X_t_full[good_bins, :] = X_transformed
 
     return X_t_full
+
+
+def expand(eigs, factor, interpolate=None):
+    """
+    Expand the track of eigenvectors by a given factor.
+    """
+
+    columns = eigs.columns
+    eigs = eigs.values
+    eigs = np.repeat(eigs, factor, axis=0)
+
+    if not interpolate is None:
+        eigs = interpolate(eigs)
+
+    return pd.DataFrame(eigs, columns=columns)
+
+
+def imshow_rasterized(x, func=np.nanmean, ax=None, coarse_factor=10, **kwargs):
+    """
+    Plot rasterized linear heatmap
+    """
+    if len(x.shape)==1:
+        x = np.array([x])
+    
+    X = numutils.coarsen(
+        func,
+        x,
+        {1: coarse_factor},
+        trim_excess=True
+    )
+    if ax is None:
+        ax = plt
+    ax.matshow(
+        X,
+        rasterized=True,
+        aspect='auto',
+        # extent=extent,
+        **kwargs
+    )
