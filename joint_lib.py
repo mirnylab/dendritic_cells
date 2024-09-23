@@ -1,3 +1,8 @@
+""" joint_lib is a technical library for supporting spectral analysis by Aleksandra Galitsyna. 
+
+
+"""
+
 import numpy as np
 import pandas as pd
 
@@ -86,7 +91,7 @@ def _normalize_matrix_cis(A, perc_top=99.95, perc_bottom=1, ignore_diags=2):
     OE, _, _, _ = numutils.observed_over_expected(A, is_good_bin)
 
     # Inject zero diagonal, balance and rescale margins to 1
-    numutils.set_diag(A, 0, 0)
+    A = numutils.set_diag(A, 0, 0)
     OE = numutils.iterative_correction_symmetric(OE)[0]
     marg = np.r_[np.sum(OE, axis=0), np.sum(OE, axis=1)]
     marg = np.mean(marg[marg > 0])
